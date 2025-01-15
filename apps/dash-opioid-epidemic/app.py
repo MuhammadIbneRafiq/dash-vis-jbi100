@@ -2,16 +2,14 @@ import os
 import pathlib
 import re
 
-import dash
-import dash_core_components as dcc
-import dash_html_components as html
+from dash import Dash, dcc, html
 import pandas as pd
 from dash.dependencies import Input, Output, State
 import cufflinks as cf
 
 # Initialize app
 
-app = dash.Dash(
+app = Dash(
     __name__,
     meta_tags=[
         {"name": "viewport", "content": "width=device-width, initial-scale=1.0"}
@@ -89,131 +87,81 @@ mapbox_style = "mapbox://styles/plotlymapbox/cjvprkf3t1kns1cqjxuxmwixz"
 # App layout
 
 app.layout = html.Div(
-    id="root",
+    className="container scalable",
     children=[
         html.Div(
-            id="header",
+            id="banner",
+            className="banner",
             children=[
-                html.A(
-                    html.Img(id="logo", src=app.get_asset_url("dash-logo.png")),
-                    href="https://plotly.com/dash/",
-                ),
-                html.A(
-                    html.Button("Enterprise Demo", className="link-button"),
-                    href="https://plotly.com/get-demo/",
-                ),
-                html.A(
-                    html.Button("Source Code", className="link-button"),
-                    href="https://github.com/plotly/dash-sample-apps/tree/main/apps/dash-opioid-epidemic",
-                ),
-                html.H4(children="Rate of US Poison-Induced Deaths"),
-                html.P(
-                    id="description",
-                    children="† Deaths are classified using the International Classification of Diseases, \
-                    Tenth Revision (ICD–10). Drug-poisoning deaths are defined as having ICD–10 underlying \
-                    cause-of-death codes X40–X44 (unintentional), X60–X64 (suicide), X85 (homicide), or Y10–Y14 \
-                    (undetermined intent).",
-                ),
+                html.H6("Dash Clinical Analytics"),
+                html.Img(src=app.get_asset_url("plotly_logo_white.png")),
             ],
         ),
         html.Div(
-            id="app-container",
+            id="upper-container",
+            className="row",
             children=[
+                # Remove or define this function if needed
+                # build_upper_left_panel(),
                 html.Div(
-                    id="left-column",
+                    id="geo-map-outer",
+                    className="six columns",
                     children=[
-                        html.Div(
-                            id="slider-container",
-                            children=[
-                                html.P(
-                                    id="slider-text",
-                                    children="Drag the slider to change the year:",
-                                ),
-                                dcc.Slider(
-                                    id="years-slider",
-                                    min=min(YEARS),
-                                    max=max(YEARS),
-                                    value=min(YEARS),
-                                    marks={
-                                        str(year): {
-                                            "label": str(year),
-                                            "style": {"color": "#7fafdf"},
-                                        }
-                                        for year in YEARS
-                                    },
-                                ),
-                            ],
+                        html.P(
+                            id="map-title",
+                            children="Medicare Provider Charges in the State of {}".format(
+                                "Alabama"  # Replace with appropriate state if needed
+                            ),
                         ),
                         html.Div(
-                            id="heatmap-container",
+                            id="geo-map-loading-outer",
                             children=[
-                                html.P(
-                                    "Heatmap of age adjusted mortality rates \
-                            from poisonings in year {0}".format(
-                                        min(YEARS)
-                                    ),
-                                    id="heatmap-title",
-                                ),
-                                dcc.Graph(
-                                    id="county-choropleth",
-                                    figure=dict(
-                                        layout=dict(
-                                            mapbox=dict(
-                                                layers=[],
-                                                accesstoken=mapbox_access_token,
-                                                style=mapbox_style,
-                                                center=dict(
-                                                    lat=38.72490, lon=-95.61446
+                                dcc.Loading(
+                                    id="loading",
+                                    children=dcc.Graph(
+                                        id="county-choropleth",
+                                        figure=dict(
+                                            data=[],
+                                            layout=dict(
+                                                mapbox=dict(
+                                                    layers=[],
+                                                    accesstoken=mapbox_access_token,
+                                                    style=mapbox_style,
+                                                    center=dict(lat=38.72490, lon=-95.61446),
+                                                    pitch=0,
+                                                    zoom=3.5,
                                                 ),
-                                                pitch=0,
-                                                zoom=3.5,
+                                                autosize=True,
                                             ),
-                                            autosize=True,
                                         ),
                                     ),
-                                ),
+                                )
                             ],
                         ),
                     ],
                 ),
+            ],
+        ),
+        html.Div(
+            id="lower-container",
+            className="row",
+            children=[
                 html.Div(
-                    id="graph-container",
+                    className="six columns",
                     children=[
-                        html.P(id="chart-selector", children="Select chart:"),
-                        dcc.Dropdown(
-                            options=[
-                                {
-                                    "label": "Histogram of total number of deaths (single year)",
-                                    "value": "show_absolute_deaths_single_year",
-                                },
-                                {
-                                    "label": "Histogram of total number of deaths (1999-2016)",
-                                    "value": "absolute_deaths_all_time",
-                                },
-                                {
-                                    "label": "Age-adjusted death rate (single year)",
-                                    "value": "show_death_rate_single_year",
-                                },
-                                {
-                                    "label": "Trends in age-adjusted death rate (1999-2016)",
-                                    "value": "death_rate_all_time",
-                                },
-                            ],
-                            value="show_death_rate_single_year",
-                            id="chart-dropdown",
-                        ),
                         dcc.Graph(
                             id="selected-data",
                             figure=dict(
                                 data=[dict(x=0, y=0)],
                                 layout=dict(
-                                    paper_bgcolor="#F4F4F8",
-                                    plot_bgcolor="#F4F4F8",
-                                    autofill=True,
-                                    margin=dict(t=75, r=50, b=100, l=50),
+                                    title="Click-drag on the map to select counties",
+                                    paper_bgcolor="#1f2630",
+                                    plot_bgcolor="#1f2630",
+                                    font=dict(color="#2cfec1"),
+                                    margin=dict(t=75, r=50, b=100, l=75),
                                 ),
                             ),
-                        ),
+                        )
                     ],
                 ),
             ],

@@ -1,15 +1,21 @@
-import dash
-import dash_table
-import dash_core_components as dcc
-import dash_html_components as html
+from dash import Dash, dcc, html, dash_table, no_update, callback_context
 import plotly.graph_objs as go
 from dash.dependencies import State, Input, Output
 from dash.exceptions import PreventUpdate
 
 import pandas as pd
-import os
+import numpy as np
 
-app = dash.Dash(
+# Load and prepare the shark attack data
+file_path = 'data/Australian Shark-Incident Database Public Version.xlsx'
+df_shark = pd.read_excel(file_path, index_col=0)
+
+numerical_cols = ['Victim.age', 'Shark.length.m', 'Latitude', 'Longitude', 'Incident.year']
+for i in numerical_cols:
+    print(df_shark[col].min(), df_shark[col].max())
+
+
+app = Dash(
     __name__,
     meta_tags=[
         {
@@ -18,132 +24,19 @@ app = dash.Dash(
         }
     ],
 )
-app.title = "Medical Provider Charges"
+app.title = "Australian Shark Incident Analysis"
 server = app.server
 
 app.config["suppress_callback_exceptions"] = True
 
-# Plotly mapbox token
-mapbox_access_token = "pk.eyJ1IjoicGxvdGx5bWFwYm94IiwiYSI6ImNrOWJqb2F4djBnMjEzbG50amg0dnJieG4ifQ.Zme1-Uzoi75IaFbieBDl3A"
-
-state_map = {
-    "AK": "Alaska",
-    "AL": "Alabama",
-    "AR": "Arkansas",
-    "AZ": "Arizona",
-    "CA": "California",
-    "CO": "Colorado",
-    "CT": "Connecticut",
-    "DC": "District of Columbia",
-    "DE": "Delaware",
-    "FL": "Florida",
-    "GA": "Georgia",
-    "HI": "Hawaii",
-    "IA": "Iowa",
-    "ID": "Idaho",
-    "IL": "Illinois",
-    "IN": "Indiana",
-    "KS": "Kansas",
-    "KY": "Kentucky",
-    "LA": "Louisiana",
-    "MA": "Massachusetts",
-    "MD": "Maryland",
-    "ME": "Maine",
-    "MI": "Michigan",
-    "MN": "Minnesota",
-    "MO": "Missouri",
-    "MS": "Mississippi",
-    "MT": "Montana",
-    "NC": "North Carolina",
-    "ND": "North Dakota",
-    "NE": "Nebraska",
-    "NH": "New Hampshire",
-    "NJ": "New Jersey",
-    "NM": "New Mexico",
-    "NV": "Nevada",
-    "NY": "New York",
-    "OH": "Ohio",
-    "OK": "Oklahoma",
-    "OR": "Oregon",
-    "PA": "Pennsylvania",
-    "RI": "Rhode Island",
-    "SC": "South Carolina",
-    "SD": "South Dakota",
-    "TN": "Tennessee",
-    "TX": "Texas",
-    "UT": "Utah",
-    "VA": "Virginia",
-    "VT": "Vermont",
-    "WA": "Washington",
-    "WI": "Wisconsin",
-    "WV": "West Virginia",
-    "WY": "Wyoming",
-}
-
-state_list = list(state_map.keys())
-
-# Load data
-data_dict = {}
-for state in state_list:
-    p = os.getcwd().split(os.path.sep)
-    csv_path = "data/processed/df_{}_lat_lon.csv".format(state)
-    state_data = pd.read_csv(csv_path)
-    data_dict[state] = state_data
-
-# Cost Metric
-cost_metric = [
-    "Average Covered Charges",
-    "Average Total Payments",
-    "Average Medicare Payments",
-]
-
-init_region = data_dict[state_list[1]][
-    "Hospital Referral Region (HRR) Description"
-].unique()
-
-
-def generate_aggregation(df, metric):
-    aggregation = {
-        metric[0]: ["min", "mean", "max"],
-        metric[1]: ["min", "mean", "max"],
-        metric[2]: ["min", "mean", "max"],
-    }
-    grouped = (
-        df.groupby(["Hospital Referral Region (HRR) Description", "Provider Name"])
-        .agg(aggregation)
-        .reset_index()
-    )
-
-    grouped["lat"] = grouped["lon"] = grouped["Provider Street Address"] = grouped[
-        "Provider Name"
-    ]
-    grouped["lat"] = grouped["lat"].apply(lambda x: get_lat_lon_add(df, x)[0])
-    grouped["lon"] = grouped["lon"].apply(lambda x: get_lat_lon_add(df, x)[1])
-    grouped["Provider Street Address"] = grouped["Provider Street Address"].apply(
-        lambda x: get_lat_lon_add(df, x)[2]
-    )
-
-    return grouped
-
-
-def get_lat_lon_add(df, name):
-    return [
-        df.groupby(["Provider Name"]).get_group(name)["lat"].tolist()[0],
-        df.groupby(["Provider Name"]).get_group(name)["lon"].tolist()[0],
-        df.groupby(["Provider Name"])
-        .get_group(name)["Provider Street Address"]
-        .tolist()[0],
-    ]
-
-
 def build_upper_left_panel():
     return html.Div(
         id="upper-left",
-        className="six columns",
+        className="two columns",
         children=[
             html.P(
                 className="section-title",
-                children="Choose hospital on the map or procedures from the list below to see costs",
+                children="Choose filters to see shark incident data",
             ),
             html.Div(
                 className="control-row-1",
@@ -154,19 +47,22 @@ def build_upper_left_panel():
                             html.Label("Select a State"),
                             dcc.Dropdown(
                                 id="state-select",
-                                options=[{"label": i, "value": i} for i in state_list],
-                                value=state_list[1],
+                                options=[{"label": i, "value": i} for i in df_shark['State'].unique()],
+                                value=df_shark['State'].unique()[0],
                             ),
                         ],
                     ),
                     html.Div(
                         id="select-metric-outer",
                         children=[
-                            html.Label("Choose a Cost Metric"),
+                            html.Label("Choose a Metric"),
                             dcc.Dropdown(
                                 id="metric-select",
-                                options=[{"label": i, "value": i} for i in cost_metric],
-                                value=cost_metric[0],
+                                options=[
+                                    {"label": "Victim Age", "value": "Victim.age"},
+                                    {"label": "Shark Length", "value": "Shark.length.m"},
+                                ],
+                                value="Victim.age",
                             ),
                         ],
                     ),
@@ -200,14 +96,14 @@ def build_upper_left_panel():
                     html.Div(
                         id="table-upper",
                         children=[
-                            html.P("Hospital Charges Summary"),
+                            html.P("Incident Summary"),
                             dcc.Loading(children=html.Div(id="cost-stats-container")),
                         ],
                     ),
                     html.Div(
                         id="table-lower",
                         children=[
-                            html.P("Procedure Charges Summary"),
+                            html.P("Detailed Incident Summary"),
                             dcc.Loading(
                                 children=html.Div(id="procedure-stats-container")
                             ),
@@ -218,149 +114,30 @@ def build_upper_left_panel():
         ],
     )
 
-
-def generate_geo_map(geo_data, selected_metric, region_select, procedure_select):
-    filtered_data = geo_data[
-        geo_data["Hospital Referral Region (HRR) Description"].isin(region_select)
-    ]
-
-    colors = ["#21c7ef", "#76f2ff", "#ff6969", "#ff1717"]
-
-    hospitals = []
-
-    lat = filtered_data["lat"].tolist()
-    lon = filtered_data["lon"].tolist()
-    average_covered_charges_mean = filtered_data[selected_metric]["mean"].tolist()
-    regions = filtered_data["Hospital Referral Region (HRR) Description"].tolist()
-    provider_name = filtered_data["Provider Name"].tolist()
-
-    # Cost metric mapping from aggregated data
-
-    cost_metric_data = {}
-    cost_metric_data["min"] = filtered_data[selected_metric]["mean"].min()
-    cost_metric_data["max"] = filtered_data[selected_metric]["mean"].max()
-    cost_metric_data["mid"] = (cost_metric_data["min"] + cost_metric_data["max"]) / 2
-    cost_metric_data["low_mid"] = (
-        cost_metric_data["min"] + cost_metric_data["mid"]
-    ) / 2
-    cost_metric_data["high_mid"] = (
-        cost_metric_data["mid"] + cost_metric_data["max"]
-    ) / 2
-
-    for i in range(len(lat)):
-        val = average_covered_charges_mean[i]
-        region = regions[i]
-        provider = provider_name[i]
-
-        if val <= cost_metric_data["low_mid"]:
-            color = colors[0]
-        elif cost_metric_data["low_mid"] < val <= cost_metric_data["mid"]:
-            color = colors[1]
-        elif cost_metric_data["mid"] < val <= cost_metric_data["high_mid"]:
-            color = colors[2]
-        else:
-            color = colors[3]
-
-        selected_index = []
-        if provider in procedure_select["hospital"]:
-            selected_index = [0]
-
-        hospital = go.Scattermapbox(
-            lat=[lat[i]],
-            lon=[lon[i]],
-            mode="markers",
-            marker=dict(
-                color=color,
-                showscale=True,
-                colorscale=[
-                    [0, "#21c7ef"],
-                    [0.33, "#76f2ff"],
-                    [0.66, "#ff6969"],
-                    [1, "#ff1717"],
-                ],
-                cmin=cost_metric_data["min"],
-                cmax=cost_metric_data["max"],
-                size=10
-                * (1 + (val + cost_metric_data["min"]) / cost_metric_data["mid"]),
-                colorbar=dict(
-                    x=0.9,
-                    len=0.7,
-                    title=dict(
-                        text="Average Cost",
-                        font={"color": "#737a8d", "family": "Open Sans"},
-                    ),
-                    titleside="top",
-                    tickmode="array",
-                    tickvals=[cost_metric_data["min"], cost_metric_data["max"]],
-                    ticktext=[
-                        "${:,.2f}".format(cost_metric_data["min"]),
-                        "${:,.2f}".format(cost_metric_data["max"]),
-                    ],
-                    ticks="outside",
-                    thickness=15,
-                    tickfont={"family": "Open Sans", "color": "#737a8d"},
-                ),
-            ),
-            opacity=0.8,
-            selectedpoints=selected_index,
-            selected=dict(marker={"color": "#ffff00"}),
-            customdata=[(provider, region)],
-            hoverinfo="text",
-            text=provider
-            + "<br>"
-            + region
-            + "<br>Average Procedure Cost:"
-            + " ${:,.2f}".format(val),
-        )
-        hospitals.append(hospital)
-
-    layout = go.Layout(
-        margin=dict(l=10, r=10, t=20, b=10, pad=5),
-        plot_bgcolor="#171b26",
-        paper_bgcolor="#171b26",
-        clickmode="event+select",
-        hovermode="closest",
-        showlegend=False,
-        mapbox=go.layout.Mapbox(
-            accesstoken=mapbox_access_token,
-            bearing=10,
-            center=go.layout.mapbox.Center(
-                lat=filtered_data.lat.mean(), lon=filtered_data.lon.mean()
-            ),
-            pitch=5,
-            zoom=5,
-            style="mapbox://styles/plotlymapbox/cjvppq1jl1ips1co3j12b9hex",
-        ),
-    )
-
-    return {"data": hospitals, "layout": layout}
-
-
 def generate_procedure_plot(raw_data, cost_select, region_select, provider_select):
-    procedure_data = raw_data[
-        raw_data["Hospital Referral Region (HRR) Description"].isin(region_select)
-    ].reset_index()
+    # Filter data based on region
+    procedure_data = raw_data[raw_data['State'].isin(region_select)].reset_index()
 
     traces = []
     selected_index = procedure_data[
-        procedure_data["Provider Name"].isin(provider_select)
+        procedure_data['Location'].isin(provider_select)
     ].index
 
     text = (
-        procedure_data["Provider Name"]
+        procedure_data['Location']
         + "<br>"
         + "<b>"
-        + procedure_data["DRG Definition"].map(str)
+        + procedure_data['Shark.common.name'].map(str)
         + "/<b> <br>"
-        + "Average Procedure Cost: $ "
-        + procedure_data[cost_select].map(str)
+        + "Incident Year: "
+        + procedure_data['Incident.year'].map(str)
     )
 
     provider_trace = go.Box(
-        y=procedure_data["DRG Definition"],
+        y=procedure_data['Shark.common.name'],
         x=procedure_data[cost_select],
         name="",
-        customdata=procedure_data["Provider Name"],
+        customdata=procedure_data['Location'],
         boxpoints="all",
         jitter=0,
         pointpos=0,
@@ -392,7 +169,7 @@ def generate_procedure_plot(raw_data, cost_select, region_select, provider_selec
             zeroline=False,
             automargin=True,
             showticklabels=True,
-            title=dict(text="Procedure Cost", font=dict(color="#737a8d")),
+            title=dict(text="Metric", font=dict(color="#737a8d")),
             linecolor="#737a8d",
             tickfont=dict(color="#737a8d"),
             type="log",
@@ -406,10 +183,61 @@ def generate_procedure_plot(raw_data, cost_select, region_select, provider_selec
         plot_bgcolor="#171b26",
         paper_bgcolor="#171b26",
     )
-    # x : procedure, y: cost,
     return {"data": traces, "layout": layout}
 
+def create_parallel_coordinates():
+    # Select numerical columns for parallel coordinates
+    numerical_cols = ['Victim.age', 'Shark.length.m', 'Latitude', 'Longitude', 'Incident.year']
+    
+    dimensions = []    
+    # Create dimensions for each numerical column
+    for col in numerical_cols:
+        dimensions.append(
+            dict(
+                range=[df_shark[col].min(), df_shark[col].max()],
+                label=col.replace('.', ' '),
+                values=df_shark[col],
+                ticktext=None,
+                tickvals=None
+            )
+        )
+    
+    # Add categorical dimension for Shark Species
+    dimensions.append(
+        dict(
+            range=[0, len(df_shark['Shark.common.name'].unique())],
+            ticktext=df_shark['Shark.common.name'].unique(),
+            tickvals=list(range(len(df_shark['Shark.common.name'].unique()))),
+            label='Shark Species',
+            values=[list(df_shark['Shark.common.name'].unique()).index(x) for x in df_shark['Shark.common.name']]
+        )
+    )
+    
+    # Create parallel coordinates plot
+    fig = go.Figure(data=
+        go.Parcoords(
+            line=dict(
+                color=df_shark['Incident.year'],
+                colorscale='Viridis'
+            ),
+            dimensions=dimensions,
+        )
+    )
+    
+    # Update layout
+    fig.update_layout(
+        plot_bgcolor='#171b26',
+        paper_bgcolor='#171b26',
+        font=dict(color='#737a8d'),
+        margin=dict(l=80, r=80, t=30, b=30),
+    )
+    
+    return fig
 
+# Add this to app layout in the lower container
+
+
+# Define the layout
 app.layout = html.Div(
     className="container scalable",
     children=[
@@ -417,7 +245,7 @@ app.layout = html.Div(
             id="banner",
             className="banner",
             children=[
-                html.H6("Dash Clinical Analytics"),
+                html.H6("Australian Shark attack"),
                 html.Img(src=app.get_asset_url("plotly_logo_white.png")),
             ],
         ),
@@ -432,9 +260,7 @@ app.layout = html.Div(
                     children=[
                         html.P(
                             id="map-title",
-                            children="Medicare Provider Charges in the State of {}".format(
-                                state_map[state_list[0]]
-                            ),
+                            children="Shark Incidents in Australia",
                         ),
                         html.Div(
                             id="geo-map-loading-outer",
@@ -464,14 +290,44 @@ app.layout = html.Div(
                 dcc.Graph(
                     id="procedure-plot",
                     figure=generate_procedure_plot(
-                        data_dict[state_list[1]], cost_metric[0], init_region, []
+                        df_shark, 'Victim.age', df_shark['State'].unique(), []
                     ),
                 )
             ],
         ),
-    ],
+        html.Div(
+        className="container scalable",
+        children=[
+            # ... (previous layout elements) ...
+            html.Div(
+                id="lower-container",
+                children=[
+                    dcc.Graph(
+                        id="procedure-plot",
+                        figure=generate_procedure_plot(
+                            df_shark, 'Victim.age', df_shark['State'].unique(), []
+                        ),
+                    ),
+                    # Add parallel coordinates plot
+                    html.Div(
+                        className="twelve columns",
+                        children=[
+                            html.P(
+                                className="section-title",
+                                children="Parallel Coordinates View of Shark Incident Data",
+                            ),
+                            dcc.Graph(
+                                id='parallel-coords-plot',
+                                figure=create_parallel_coordinates()
+                            )
+                        ]
+                    )
+                ],
+            ),
+        ],
+    )
+],
 )
-
 
 @app.callback(
     [
@@ -482,24 +338,36 @@ app.layout = html.Div(
     [Input("region-select-all", "value"), Input("state-select", "value"),],
 )
 def update_region_dropdown(select_all, state_select):
-    state_raw_data = data_dict[state_select]
-    regions = state_raw_data["Hospital Referral Region (HRR) Description"].unique()
-    options = [{"label": i, "value": i} for i in regions]
+    # Filter the data for the selected state
+    state_raw_data = df_shark[df_shark['State'] == state_select]
+    
+    # Get unique regions
+    regions = state_raw_data['Location'].unique() if not state_raw_data.empty else []
+    latitude = state_raw_data['Latitude'].unique() if not state_raw_data.empty else []
+    long = state_raw_data['Latitude'].unique() if not state_raw_data.empty else []
 
-    ctx = dash.callback_context
+
+    
+    # Create options for the dropdown
+    options = [{"labelSSS": i, "value": i} for i in regions if i]
+
+    # Debugging: Print the options to verify their structure
+    print("Dropdown options:", options[0])
+
+    ctx = callback_context
     if ctx.triggered[0]["prop_id"].split(".")[0] == "region-select-all":
         if select_all == ["All"]:
             value = [i["value"] for i in options]
         else:
-            value = dash.no_update
+            value = no_update
     else:
-        value = regions[:4]
+        value = regions[:4] if len(regions) >= 4 else regions
+
     return (
         value,
         options,
-        "Medicare Provider Charges in the State of {}".format(state_map[state_select]),
+        "Shark Incidents in {}".format(state_select),
     )
-
 
 @app.callback(
     Output("checklist-container", "children"),
@@ -526,7 +394,6 @@ def update_checklist(selected, select_options, checked):
         value=["All"],
     )
 
-
 @app.callback(
     Output("cost-stats-container", "children"),
     [
@@ -537,63 +404,62 @@ def update_checklist(selected, select_options, checked):
     ],
 )
 def update_hospital_datatable(geo_select, procedure_select, cost_select, state_select):
-    state_agg = generate_aggregation(data_dict[state_select], cost_metric)
+    state_agg = df_shark[df_shark['State'] == state_select]
     # make table from geo-select
     geo_data_dict = {
-        "Provider Name": [],
-        "City": [],
-        "Street Address": [],
-        "Maximum Cost ($)": [],
-        "Minimum Cost ($)": [],
+        "Location": [],
+        "Shark Species": [],
+        "Incident Year": [],
+        "Maximum Metric": [],
+        "Minimum Metric": [],
     }
 
-    ctx = dash.callback_context
+    ctx = callback_context
     if ctx.triggered:
         prop_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
         # make table from procedure-select
         if prop_id == "procedure-plot" and procedure_select is not None:
-
             for point in procedure_select["points"]:
-                provider = point["customdata"]
+                location = point["customdata"]
+                dff = state_agg[state_agg["Location"] == location]
 
-                dff = state_agg[state_agg["Provider Name"] == provider]
+                if not dff.empty:
+                    geo_data_dict["Location"].append(location)
+                    shark_species = dff["Shark.common.name"].tolist()[0]
+                    geo_data_dict["Shark Species"].append(shark_species)
 
-                geo_data_dict["Provider Name"].append(point["customdata"])
-                city = dff["Hospital Referral Region (HRR) Description"].tolist()[0]
-                geo_data_dict["City"].append(city)
+                    year = dff["Incident.year"].tolist()[0]
+                    geo_data_dict["Incident Year"].append(year)
 
-                address = dff["Provider Street Address"].tolist()[0]
-                geo_data_dict["Street Address"].append(address)
-
-                geo_data_dict["Maximum Cost ($)"].append(
-                    dff[cost_select]["max"].tolist()[0]
-                )
-                geo_data_dict["Minimum Cost ($)"].append(
-                    dff[cost_select]["min"].tolist()[0]
-                )
+                    geo_data_dict["Maximum Metric"].append(
+                        dff[cost_select].max()
+                    )
+                    geo_data_dict["Minimum Metric"].append(
+                        dff[cost_select].min()
+                    )
 
         if prop_id == "geo-map" and geo_select is not None:
-
             for point in geo_select["points"]:
-                provider = point["customdata"][0]
-                dff = state_agg[state_agg["Provider Name"] == provider]
+                location = point["customdata"][0]
+                dff = state_agg[state_agg["Location"] == location]
 
-                geo_data_dict["Provider Name"].append(point["customdata"][0])
-                geo_data_dict["City"].append(point["customdata"][1].split("- ")[1])
+                if not dff.empty:
+                    geo_data_dict["Location"].append(location)
+                    geo_data_dict["Shark Species"].append(dff["Shark.common.name"].tolist()[0])
 
-                address = dff["Provider Street Address"].tolist()[0]
-                geo_data_dict["Street Address"].append(address)
+                    year = dff["Incident.year"].tolist()[0]
+                    geo_data_dict["Incident Year"].append(year)
 
-                geo_data_dict["Maximum Cost ($)"].append(
-                    dff[cost_select]["max"].tolist()[0]
-                )
-                geo_data_dict["Minimum Cost ($)"].append(
-                    dff[cost_select]["min"].tolist()[0]
-                )
+                    geo_data_dict["Maximum Metric"].append(
+                        dff[cost_select].max()
+                    )
+                    geo_data_dict["Minimum Metric"].append(
+                        dff[cost_select].min()
+                    )
 
         geo_data_df = pd.DataFrame(data=geo_data_dict)
-        data = geo_data_df.to_dict("rows")
+        data = geo_data_df.to_dict("records")
 
     else:
         data = [{}]
@@ -609,7 +475,6 @@ def update_hospital_datatable(geo_select, procedure_select, cost_select, state_s
         style_header={"background-color": "#1f2536", "padding": "0px 5px"},
     )
 
-
 @app.callback(
     Output("procedure-stats-container", "children"),
     [
@@ -621,50 +486,49 @@ def update_hospital_datatable(geo_select, procedure_select, cost_select, state_s
 )
 def update_procedure_stats(procedure_select, geo_select, cost_select, state_select):
     procedure_dict = {
-        "DRG": [],
-        "Procedure": [],
-        "Provider Name": [],
-        "Cost Summary": [],
+        "Shark Species": [],
+        "Location": [],
+        "Incident Year": [],
+        "Metric Summary": [],
     }
 
-    ctx = dash.callback_context
+    ctx = callback_context
     prop_id = ""
     if ctx.triggered:
         prop_id = ctx.triggered[0]["prop_id"].split(".")[0]
 
     if prop_id == "procedure-plot" and procedure_select is not None:
         for point in procedure_select["points"]:
-            procedure_dict["DRG"].append(point["y"].split(" - ")[0])
-            procedure_dict["Procedure"].append(point["y"].split(" - ")[1])
+            procedure_dict["Shark Species"].append(point["y"])
+            procedure_dict["Location"].append(point["customdata"])
+            procedure_dict["Incident Year"].append(point["x"])
+            procedure_dict["Metric Summary"].append(("${:,.2f}".format(point["x"])))
 
-            procedure_dict["Provider Name"].append(point["customdata"])
-            procedure_dict["Cost Summary"].append(("${:,.2f}".format(point["x"])))
-
-    # Display all procedures at selected hospital
-    provider_select = []
+    # Display all procedures at selected location
+    location_select = []
 
     if prop_id == "geo-map" and geo_select is not None:
         for point in geo_select["points"]:
-            provider = point["customdata"][0]
-            provider_select.append(provider)
+            location = point["customdata"][0]
+            location_select.append(location)
 
-        state_raw_data = data_dict[state_select]
-        provider_filtered = state_raw_data[
-            state_raw_data["Provider Name"].isin(provider_select)
+        state_raw_data = df_shark[df_shark['State'] == state_select]
+        location_filtered = state_raw_data[
+            state_raw_data["Location"].isin(location_select)
         ]
 
-        for i in range(len(provider_filtered)):
-            procedure_dict["DRG"].append(
-                provider_filtered.iloc[i]["DRG Definition"].split(" - ")[0]
+        for i in range(len(location_filtered)):
+            procedure_dict["Shark Species"].append(
+                location_filtered.iloc[i]["Shark.common.name"]
             )
-            procedure_dict["Procedure"].append(
-                provider_filtered.iloc[i]["DRG Definition"].split(" - ")[1]
+            procedure_dict["Location"].append(
+                location_filtered.iloc[i]["Location"]
             )
-            procedure_dict["Provider Name"].append(
-                provider_filtered.iloc[i]["Provider Name"]
+            procedure_dict["Incident Year"].append(
+                location_filtered.iloc[i]["Incident.year"]
             )
-            procedure_dict["Cost Summary"].append(
-                "${:,.2f}".format(provider_filtered.iloc[0][cost_select])
+            procedure_dict["Metric Summary"].append(
+                "${:,.2f}".format(location_filtered.iloc[0][cost_select])
             )
 
     procedure_data_df = pd.DataFrame(data=procedure_dict)
@@ -672,7 +536,7 @@ def update_procedure_stats(procedure_select, geo_select, cost_select, state_sele
     return dash_table.DataTable(
         id="procedure-stats-table",
         columns=[{"name": i, "id": i} for i in procedure_dict.keys()],
-        data=procedure_data_df.to_dict("rows"),
+        data=procedure_data_df.to_dict("records"),
         filter_action="native",
         sort_action="native",
         style_cell={
@@ -686,7 +550,6 @@ def update_procedure_stats(procedure_select, geo_select, cost_select, state_sele
         style_header={"background-color": "#1f2536", "padding": "2px 12px 0px 12px"},
     )
 
-
 @app.callback(
     Output("geo-map", "figure"),
     [
@@ -697,39 +560,139 @@ def update_procedure_stats(procedure_select, geo_select, cost_select, state_sele
     ],
 )
 def update_geo_map(cost_select, region_select, procedure_select, state_select):
-    # generate geo map from state-select, procedure-select
-    state_agg_data = generate_aggregation(data_dict[state_select], cost_metric)
+    # Ensure region_select is a list
+    if region_select is None:
+        region_select = []
 
-    provider_data = {"procedure": [], "hospital": []}
+    # Generate geo map from state-select, procedure-select
+    state_agg_data = df_shark[df_shark['State'] == state_select]
+
+    location_data = {"procedure": [], "location": []}
     if procedure_select is not None:
         for point in procedure_select["points"]:
-            provider_data["procedure"].append(point["y"])
-            provider_data["hospital"].append(point["customdata"])
+            location_data["procedure"].append(point["y"])
+            location_data["location"].append(point["customdata"])
 
-    return generate_geo_map(state_agg_data, cost_select, region_select, provider_data)
+    return generate_geo_map(state_agg_data, cost_select, region_select, location_data)
 
+def generate_geo_map(geo_data, selected_metric, region_select, location_select):
+    # Ensure region_select is a list
+    if not isinstance(region_select, list):
+        region_select = []
 
-@app.callback(
-    Output("procedure-plot", "figure"),
-    [
-        Input("metric-select", "value"),
-        Input("region-select", "value"),
-        Input("geo-map", "selectedData"),
-        Input("state-select", "value"),
-    ],
-)
-def update_procedure_plot(cost_select, region_select, geo_select, state_select):
-    # generate procedure plot from selected provider
-    state_raw_data = data_dict[state_select]
+    filtered_data = geo_data[geo_data['Location'].isin(region_select)]
 
-    provider_select = []
-    if geo_select is not None:
-        for point in geo_select["points"]:
-            provider_select.append(point["customdata"][0])
-    return generate_procedure_plot(
-        state_raw_data, cost_select, region_select, provider_select
+    colors = ["#21c7ef", "#76f2ff", "#ff6969", "#ff1717"]
+
+    locations = []
+
+    lat = filtered_data["Latitude"].tolist()
+    lon = filtered_data["Longitude"].tolist()
+    metric_mean = filtered_data[selected_metric].mean()
+    regions = filtered_data["Location"].tolist()
+    shark_species = filtered_data["Shark.common.name"].tolist()
+
+    # Metric mapping from aggregated data
+
+    metric_data = {}
+    metric_data["min"] = filtered_data[selected_metric].min()
+    metric_data["max"] = filtered_data[selected_metric].max()
+    metric_data["mid"] = (metric_data["min"] + metric_data["max"]) / 2
+    metric_data["low_mid"] = (
+        metric_data["min"] + metric_data["mid"]
+    ) / 2
+    metric_data["high_mid"] = (
+        metric_data["mid"] + metric_data["max"]
+    ) / 2
+
+    for i in range(len(lat)):
+        val = metric_mean
+        region = regions[i]
+        species = shark_species[i]
+
+        if val <= metric_data["low_mid"]:
+            color = colors[0]
+        elif metric_data["low_mid"] < val <= metric_data["mid"]:
+            color = colors[1]
+        elif metric_data["mid"] < val <= metric_data["high_mid"]:
+            color = colors[2]
+        else:
+            color = colors[3]
+
+        selected_index = []
+        if region in location_select["location"]:
+            selected_index = [0]
+
+        location = go.Scattermapbox(
+            lat=[lat[i]],
+            lon=[lon[i]],
+            mode="markers",
+            marker=dict(
+                color=color,
+                showscale=True,
+                colorscale=[
+                    [0, "#21c7ef"],
+                    [0.33, "#76f2ff"],
+                    [0.66, "#ff6969"],
+                    [1, "#ff1717"],
+                ],
+                cmin=metric_data["min"],
+                cmax=metric_data["max"],
+                size=10
+                * (1 + (val + metric_data["min"]) / metric_data["mid"]),
+                colorbar=dict(
+                    x=0.9,
+                    len=0.7,
+                    title=dict(
+                        text="Average Metric",
+                        font={"color": "#737a8d", "family": "Open Sans"},
+                    ),
+                    titleside="top",
+                    tickmode="array",
+                    tickvals=[metric_data["min"], metric_data["max"]],
+                    ticktext=[
+                        "${:,.2f}".format(metric_data["min"]),
+                        "${:,.2f}".format(metric_data["max"]),
+                    ],
+                    ticks="outside",
+                    thickness=15,
+                    tickfont={"family": "Open Sans", "color": "#737a8d"},
+                ),
+            ),
+            opacity=0.8,
+            selectedpoints=selected_index,
+            selected=dict(marker={"color": "#ffff00"}),
+            customdata=[(region, species)],
+            hoverinfo="text",
+            text=region
+            + "<br>"
+            + species
+            + "<br>Average Metric:"
+            + " ${:,.2f}".format(val),
+        )
+        locations.append(location)
+
+    layout = go.Layout(
+        margin=dict(l=10, r=10, t=20, b=10, pad=5),
+        plot_bgcolor="#171b26",
+        paper_bgcolor="#171b26",
+        clickmode="event+select",
+        hovermode="closest",
+        showlegend=False,
+        mapbox=go.layout.Mapbox(
+            accesstoken="pk.eyJ1IjoicGxvdGx5bWFwYm94IiwiYSI6ImNrOWJqb2F4djBnMjEzbG50amg0dnJieG4ifQ.Zme1-Uzoi75IaFbieBDl3A",
+            bearing=10,
+            center=go.layout.mapbox.Center(
+                lat=filtered_data.Latitude.mean(), lon=filtered_data.Longitude.mean()
+            ),
+            pitch=5,
+            zoom=5,
+            style="carto-darkmatter"
+,
+        ),
     )
 
+    return {"data": locations, "layout": layout}
 
 if __name__ == "__main__":
     app.run_server(debug=True)
