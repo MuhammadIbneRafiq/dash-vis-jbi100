@@ -10,9 +10,6 @@ import numpy as np
 file_path = 'data/Australian Shark-Incident Database Public Version.xlsx'
 df_shark = pd.read_excel(file_path, index_col=0)
 
-numerical_cols = ['Victim.age', 'Shark.length.m', 'Latitude', 'Longitude', 'Incident.year']
-for i in numerical_cols:
-    print(df_shark[col].min(), df_shark[col].max())
 
 
 app = Dash(
