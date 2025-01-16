@@ -188,6 +188,28 @@ def create_parallel_coordinates():
     
     dimensions = []    
     # Create dimensions for each numerical column
+
+    numerical_cols_with = [
+        # 'Victim.age', 
+        # 'Shark.length.m', 
+        'Latitude'
+        'Longitude', 
+        'Incident.year'
+    ]
+    for col in numerical_cols_with:
+        print(col)
+        print(type(df_shark[col]))
+        print(df_shark[col])
+        print(type(df_shark[col].iloc[0]))  # Use iloc to access by integer position
+        print(df_shark[col].iloc[0])        # Print first value
+        print(df_shark[col].values)         # Print all values as numpy array
+        
+        print(len(df_shark[col].values))
+        # Convert to numeric, handling any non-numeric values
+        numeric_series = pd.to_numeric(df_shark[col], errors='coerce')
+        print(numeric_series.min(), numeric_series.max())
+        
+        
     for col in numerical_cols:
         dimensions.append(
             dict(
